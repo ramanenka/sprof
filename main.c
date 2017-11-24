@@ -54,8 +54,6 @@ int main() {
   static struct itimerval timer;
   timer.it_interval.tv_sec = 0;
   timer.it_interval.tv_usec = 1000000/100;
-  // timer.it_value = timer.it_interval;
-  // timer.it_interval.
   timer.it_value = timer.it_interval;
   if (setitimer(ITIMER_PROF, &timer, NULL) != 0) {
     printf("settimer failed");
