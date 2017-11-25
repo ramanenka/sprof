@@ -72,6 +72,15 @@ PHP_FUNCTION(confirm_sprof_compiled)
    follow this convention for the convenience of others editing your code.
 */
 
+PHP_FUNCTION(sprof_start)
+{
+	puts("sprof started");
+}
+
+PHP_FUNCTION(sprof_stop)
+{
+	RETURN_STRING("sprof stop get");
+}
 
 /* {{{ php_sprof_init_globals
  */
@@ -147,6 +156,8 @@ PHP_MINFO_FUNCTION(sprof)
  */
 const zend_function_entry sprof_functions[] = {
 	PHP_FE(confirm_sprof_compiled,	NULL)		/* For testing, remove later. */
+	PHP_FE(sprof_start, NULL)
+	PHP_FE(sprof_stop, NULL)
 	PHP_FE_END	/* Must be the last line in sprof_functions[] */
 };
 /* }}} */
