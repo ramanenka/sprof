@@ -18,4 +18,16 @@ if (extension_loaded($module)) {
 	$str = "Module $module is not compiled into PHP";
 }
 echo "$str\n";
+
+function busy() {
+	for ($i = 0; $i < 1E7; $i++) {
+		sin(mt_rand() / mt_getrandmax());
+	}
+}
+
+$t = microtime(true);
+sprof_start();
+busy();
+echo "signals received: ", sprof_stop(), "\n";
+echo microtime(true) - $t, "\n";
 ?>

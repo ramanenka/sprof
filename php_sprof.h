@@ -38,15 +38,16 @@ extern zend_module_entry sprof_module_entry;
 #include "TSRM.h"
 #endif
 
-/*
-  	Declare any global variables you may need between the BEGIN
-	and END macros here:
+#include <stdatomic.h>
 
 ZEND_BEGIN_MODULE_GLOBALS(sprof)
 	zend_long  global_value;
 	char *global_string;
+	atomic_bool siglock;
+	struct sigaction oact;
+	struct itimerval otimer;
+	int counter;
 ZEND_END_MODULE_GLOBALS(sprof)
-*/
 
 /* Always refer to the globals in your function as SPROF_G(variable).
    You are encouraged to rename these macros something shorter, see

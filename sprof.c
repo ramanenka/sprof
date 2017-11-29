@@ -26,10 +26,11 @@
 #include "php_ini.h"
 #include "ext/standard/info.h"
 #include "php_sprof.h"
+#include "zend_exceptions.h"
+#include <stdatomic.h>
+#include <stdbool.h>
 
-/* If you declare any globals in php_sprof.h uncomment this:
 ZEND_DECLARE_MODULE_GLOBALS(sprof)
-*/
 
 /* True global resources - no need for thread safety here */
 static int le_sprof;
@@ -43,6 +44,19 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 */
 /* }}} */
+
+static void sigprof_handler(int sig) {
+	// if we can't get the lock then the previous SIGPROF handler call is
+	// holding it, so we skip this one
+	bool expected = false;
+	if (UNEXPECTED(!atomic_compare_exchange_strong(&SPROF_G(siglock), &expected, true))) {
+		return;
+	}
+
+	SPROF_G(counter)++;
+
+	atomic_store(&SPROF_G(siglock), false);
+}
 
 /* Remove the following function when you have successfully modified config.m4
    so that your module can be compiled into PHP, it exists only for testing
@@ -74,12 +88,40 @@ PHP_FUNCTION(confirm_sprof_compiled)
 
 PHP_FUNCTION(sprof_start)
 {
-	puts("sprof started");
+	struct sigaction act;
+	memset(&act, '\0', sizeof(act));
+	act.sa_handler = &sigprof_handler;
+	sigemptyset(&act.sa_mask);
+	if (sigaction(SIGPROF, &act, &SPROF_G(oact)) < 0) {
+		zend_throw_exception(NULL, "sprof: failed to register SIGPROF signal handler", 0 TSRMLS_CC);
+		return;
+	}
+
+	static struct itimerval timer;
+	timer.it_interval.tv_sec = 0;
+	timer.it_interval.tv_usec = 1000000/100;
+	timer.it_value = timer.it_interval;
+	if (setitimer(ITIMER_PROF, &timer, &SPROF_G(otimer)) != 0) {
+		zend_throw_exception(NULL, "sprof: failed to set ITIMER_PROF timer", 0 TSRMLS_CC);
+		return;
+	}
 }
 
 PHP_FUNCTION(sprof_stop)
 {
-	RETURN_STRING("sprof stop get");
+	// SIGPROF handler should be set to &SPROF_G(oact),
+	// but it's conflicting with zend_set_timeout_ex
+	if (sigaction(SIGPROF, NULL, NULL) < 0) {
+		zend_throw_exception(NULL, "sprof: failed to unregister SIGPROF signal handler", 0 TSRMLS_CC);
+		return;
+	}
+
+	if (setitimer(ITIMER_PROF, &SPROF_G(otimer), NULL) != 0) {
+		zend_throw_exception(NULL, "sprof: failed to unset ITIMER_PROF timer", 0 TSRMLS_CC);
+		return;
+	}
+
+	RETURN_LONG(SPROF_G(counter))
 }
 
 /* {{{ php_sprof_init_globals
@@ -97,6 +139,7 @@ static void php_sprof_init_globals(zend_sprof_globals *sprof_globals)
  */
 PHP_MINIT_FUNCTION(sprof)
 {
+	SPROF_G(siglock) = ATOMIC_VAR_INIT(false);
 	/* If you have INI entries, uncomment these lines
 	REGISTER_INI_ENTRIES();
 	*/
